@@ -4,8 +4,10 @@ members = [
     "crates/kclient",
     "crates/convert",
     "crates/fbhook",
+    "crates/comic",
     "bin/kobo-syncd",
     "bin/kobo-dbtool",
+    "bin/comic-panelize",
 ]
 
 [workspace.package]

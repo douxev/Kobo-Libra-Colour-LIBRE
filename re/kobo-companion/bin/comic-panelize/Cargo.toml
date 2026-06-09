@@ -1,0 +1,12 @@
+[package]
+name = "comic-panelize"
+edition.workspace = true
+version.workspace = true
+description = "CLI: turn a CBZ into a panel-per-page CBZ (guided view) + JSON sidecar"
+
+[[bin]]
+name = "comic-panelize"
+path = "src/main.rs"
+
+[dependencies]
+comic = { path = "../../crates/comic" }

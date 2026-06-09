@@ -1,5 +1,6 @@
-// kobo-syncd — daemon de sync Kobo. Client mTLS partagé (kclient), modules activés
-// via features.conf : opds, wallabag, annotations, positions, stats, wifi (conditionnel).
+// kobo-syncd — daemon de sync Kobo. Client mTLS partagé (kclient), modules activés via
+// features.conf : opds, panelize, wallabag, annotations, positions, stats, wifi.
+// Sert aussi le PANNEAU DE CONFIG WEB (localhost uniquement) — voir web.rs.
 mod config;
 mod opds;
 mod wallabag;
@@ -7,11 +8,15 @@ mod annotations;
 mod positions;
 mod stats;
 mod wifi;
+mod panelize;
+mod web;
 
 use std::fs;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use config::{Config, load_features};
+use config::{load_features, Config};
+use web::Status;
 
 pub fn log(dest: &str, msg: &str) {
     let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
@@ -28,8 +33,14 @@ fn reachable(client: &kclient::Client, base: &str) -> bool {
     base.is_empty() || client.get(base).send().is_ok()
 }
 
-fn run_cycle(client: &kclient::Client, c: &Config, features: &std::collections::HashSet<String>, list_only: bool) {
-    // 1) wifi conditionnel : décide si on est dans une fenêtre autorisée
+fn run_cycle(
+    client: &kclient::Client,
+    c: &Config,
+    features: &std::collections::HashSet<String>,
+    status: &Arc<Mutex<Status>>,
+    list_only: bool,
+) {
+    // 1) wifi conditionnel
     let online = if features.contains("wifi") {
         let allowed = wifi::allowed_now(c);
         wifi::ensure(c, allowed);
@@ -60,11 +71,25 @@ fn run_cycle(client: &kclient::Client, c: &Config, features: &std::collections::
         }
     }
 
-    // 3) stats (local, pas de réseau)
+    // 3) stats (local)
     if features.contains("stats") && !list_only {
         match stats::run(client, c) {
             Ok(s) => log(&c.dest, &format!("stats: {}", s)),
             Err(e) => log(&c.dest, &format!("stats: ERREUR {}", e)),
+        }
+    }
+
+    // 4) panelization auto (après le téléchargement des BD), gardée contre le chevauchement
+    //    avec un déclenchement depuis le panneau web.
+    if features.contains("panelize") && !list_only {
+        let go = match status.lock() {
+            Ok(mut s) if !s.panelizing => { s.panelizing = true; true }
+            _ => false,
+        };
+        if go {
+            let res = panelize::run(c).unwrap_or_else(|e| format!("erreur: {}", e));
+            log(&c.dest, &format!("panelize: {}", res));
+            if let Ok(mut s) = status.lock() { s.panelizing = false; s.last_panelize = res; }
         }
     }
 }
@@ -92,33 +117,47 @@ fn main() {
         config_path = exe.and_then(|p| p.parent().map(|d| d.join("kobo-syncd.conf")))
             .map(|p| p.to_string_lossy().to_string()).unwrap_or_else(|| "kobo-syncd.conf".to_string());
     }
-    let c = match Config::load(&config_path) {
-        Ok(c) => c,
-        Err(e) => { eprintln!("Erreur config : {}", e); std::process::exit(1); }
-    };
     if features_path.is_empty() {
         features_path = Path::new(&config_path).parent()
             .map(|d| d.join("features.conf")).map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|| "features.conf".to_string());
     }
-    let mut features = load_features(&features_path);
-    if features.is_empty() { features.insert("opds".to_string()); }
-
-    let _ = fs::create_dir_all(&c.dest);
-    let client = match kclient::build(&c.mtls) {
-        Ok(cl) => cl,
-        Err(e) => { eprintln!("Erreur client HTTP/mTLS : {}", e); std::process::exit(1); }
+    let c0 = match Config::load(&config_path) {
+        Ok(c) => c,
+        Err(e) => { eprintln!("Erreur config : {}", e); std::process::exit(1); }
     };
-    let mut feats: Vec<_> = features.iter().cloned().collect(); feats.sort();
-    log(&c.dest, &format!("kobo-syncd démarré (mTLS={}, modules={:?})", kclient::has_identity(&c.mtls), feats));
+    let _ = fs::create_dir_all(&c0.dest);
+    log(&c0.dest, &format!("kobo-syncd démarré (mTLS={})", kclient::has_identity(&c0.mtls)));
+
+    let status = Arc::new(Mutex::new(Status::default()));
 
     if daemon {
-        log(&c.dest, &format!("daemon (interval={}s)", c.interval));
+        // Panneau de config web (localhost uniquement), si activé.
+        if c0.getb("web", "enabled", true) {
+            let (cp, fp, st) = (config_path.clone(), features_path.clone(), status.clone());
+            std::thread::spawn(move || web::serve(cp, fp, st));
+        }
+        log(&c0.dest, &format!("daemon (interval={}s)", c0.interval));
         loop {
-            run_cycle(&client, &c, &features, false);
-            std::thread::sleep(Duration::from_secs(c.interval));
+            // Recharge config + features à chaque cycle (les réglages du panneau prennent effet).
+            let c = match Config::load(&config_path) {
+                Ok(c) => c,
+                Err(e) => { log(&c0.dest, &format!("config reload: {}", e)); std::thread::sleep(Duration::from_secs(60)); continue; }
+            };
+            let mut features = load_features(&features_path);
+            if features.is_empty() { features.insert("opds".to_string()); }
+            match kclient::build(&c.mtls) {
+                Ok(client) => run_cycle(&client, &c, &features, &status, false),
+                Err(e) => log(&c.dest, &format!("client HTTP/mTLS: {}", e)),
+            }
+            std::thread::sleep(Duration::from_secs(c.interval.max(10)));
         }
     } else {
-        run_cycle(&client, &c, &features, list);
+        let mut features = load_features(&features_path);
+        if features.is_empty() { features.insert("opds".to_string()); }
+        match kclient::build(&c0.mtls) {
+            Ok(client) => run_cycle(&client, &c0, &features, &status, list),
+            Err(e) => { eprintln!("Erreur client HTTP/mTLS : {}", e); std::process::exit(1); }
+        }
     }
 }

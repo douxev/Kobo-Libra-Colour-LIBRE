@@ -14,10 +14,11 @@ GLIBC=$KC/target/fbhook/armv7-unknown-linux-gnueabihf/release
 
 KS=$MUSL/kobo-syncd
 KD=$MUSL/kobo-dbtool
+CP=$MUSL/comic-panelize
 FB=$GLIBC/libfbhook.so
 ORIG="$ROOTFS/usr/local/Kobo/memorylogger"
 
-for f in "$KS" "$KD" "$FB" "$ORIG"; do
+for f in "$KS" "$KD" "$CP" "$FB" "$ORIG"; do
   [ -f "$f" ] || { echo "ERROR: missing: $f"; echo "  (build first: cd re/kobo-companion && cross build --release --target armv7-unknown-linux-musleabihf -p kobo-syncd -p kobo-dbtool && cross build --release --target armv7-unknown-linux-gnueabihf -p fbhook --target-dir target/fbhook)"; exit 1; }
 done
 
@@ -27,11 +28,12 @@ rm -rf "$DIST"; mkdir -p "$DIST/stage" "$DIST/onboard/.adds/kobo-companion/certs
 cp "$ORIG"                "$DIST/stage/memorylogger.bin"  # original binary
 cp "$NETCUT/memorylogger" "$DIST/stage/memorylogger"      # boot wrapper
 cp "$NETCUT/opds-netcut"  "$DIST/stage/opds-netcut.sh"    # firewall
-cp "$KS"                  "$DIST/stage/kobo-syncd"        # Group C daemon (static musl)
+cp "$KS"                  "$DIST/stage/kobo-syncd"        # Group C daemon + web panel (static musl)
 cp "$KD"                  "$DIST/stage/kobo-dbtool"       # Group B tool (static musl)
+cp "$CP"                  "$DIST/stage/comic-panelize"    # comic panelizer (static musl)
 cp "$FB"                  "$DIST/stage/libfbhook.so"      # Group A library (glibc .so)
 chmod 755 "$DIST/stage/"*
-tar -czf "$DIST/Kobo.tgz" -C "$DIST/stage" memorylogger memorylogger.bin opds-netcut.sh kobo-syncd kobo-dbtool libfbhook.so
+tar -czf "$DIST/Kobo.tgz" -C "$DIST/stage" memorylogger memorylogger.bin opds-netcut.sh kobo-syncd kobo-dbtool comic-panelize libfbhook.so
 echo "[OK] $DIST/Kobo.tgz"
 tar -tzf "$DIST/Kobo.tgz" | sed 's/^/      /'
 

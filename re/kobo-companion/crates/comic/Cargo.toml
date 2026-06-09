@@ -1,0 +1,17 @@
+[package]
+name = "comic"
+edition.workspace = true
+version.workspace = true
+description = "Comic panel detection + panel-per-page rendering (guided view, desktop preprocessor)"
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp", "webp"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+
+[dev-dependencies]
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }
+serde_json = "1"
