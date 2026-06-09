@@ -77,11 +77,17 @@ sed -i -E "s#^LAN_SUBNET=.*#LAN_SUBNET=\"$SUBNET\"#" "$PAY/netcut.conf" 2>/dev/n
 sed -i -E "s#^ENABLE_FIREWALL=.*#ENABLE_FIREWALL=\"$FIREWALL\"#" "$PAY/netcut.conf" 2>/dev/null || true
 echo ">> config: base_url=http://$IP  subnet=$SUBNET  firewall=$FIREWALL"
 
-# mTLS certs (the private key is never committed — only copied to the device)
+# mTLS certs (the private key is never committed — only copied to the device).
+# The config template ships with EMPTY mtls paths (= plain HTTP); set them here only
+# when an identity is supplied, so kclient doesn't try to read non-existent cert files.
 if [ -n "$CLIENT_CERT" ] && [ -n "$CLIENT_KEY" ] && [ -n "$CA_CERT" ]; then
   cp "$CLIENT_CERT" "$PAY/certs/client.crt"; cp "$CLIENT_KEY" "$PAY/certs/client.key"; cp "$CA_CERT" "$PAY/certs/ca.crt"
   chmod 600 "$PAY/certs/client.key"
-  echo ">> mTLS identity copied into certs/"
+  CDIR=/mnt/onboard/.adds/kobo-companion/certs
+  sed -i -E "s#^client_cert *=.*#client_cert = $CDIR/client.crt#" "$CONF"
+  sed -i -E "s#^client_key *=.*#client_key  = $CDIR/client.key#" "$CONF"
+  sed -i -E "s#^ca_cert *=.*#ca_cert     = $CDIR/ca.crt#"        "$CONF"
+  echo ">> mTLS identity copied into certs/ and enabled in config"
 fi
 
 # Feature menu (writes features.conf)

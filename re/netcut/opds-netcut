@@ -18,6 +18,7 @@ LAN_SUBNET="192.168.1.0/24"     # allowed local subnet
 OPDS_HOST=""                    # optional: single OPDS server IP (hardening)
 OPDS_PORT=""                    # optional: OPDS port
 ENABLE_FIREWALL="yes"           # "no" = do nothing (firewall disabled)
+CAPTIVE_PORT="8081"             # local connectivity-check responder (must match captive.rs PORT)
 # User config, editable over USB (takes precedence if present):
 NETCUT_CONF="/mnt/onboard/.adds/kobo-companion/netcut.conf"
 [ -f "$NETCUT_CONF" ] && . "$NETCUT_CONF"
@@ -50,6 +51,12 @@ apply() {
         # simple mode: whole LAN allowed (OPDS, DNS, NTP, router), internet blocked
         $IPT -A OUTPUT -d "$LAN_SUBNET" -j ACCEPT
     fi
+    # --- captive responder: the firmware's connectivity check (http://captive.apple.com/...)
+    #     would otherwise be DROPped, so Nickel/tolino thinks it's offline and won't open the
+    #     browser. Redirect blocked outbound HTTP (:80, non-LAN) to the local responder served
+    #     by kobo-syncd on 127.0.0.1:$CAPTIVE_PORT — it answers "Success". No byte leaves the device.
+    $IPT -t nat -F OUTPUT 2>/dev/null
+    $IPT -t nat -A OUTPUT -p tcp --dport 80 ! -d "$LAN_SUBNET" -j REDIRECT --to-ports "$CAPTIVE_PORT" 2>/dev/null
     # --- IPv6: cut entirely (not needed, avoids bypass) ---
     if [ -x "$IP6" ]; then
         $IP6 -F OUTPUT 2>/dev/null
@@ -61,6 +68,7 @@ apply() {
 
 open() {                                                  # emergency KILL-SWITCH: open everything
     $IPT -F OUTPUT; $IPT -P OUTPUT ACCEPT
+    $IPT -t nat -F OUTPUT 2>/dev/null                     # drop the captive redirect too
     [ -x "$IP6" ] && { $IP6 -F OUTPUT; $IP6 -P OUTPUT ACCEPT; }
     log "open: firewall disabled (everything allowed)"
 }

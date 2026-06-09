@@ -133,7 +133,23 @@ fn download(client: &Client, c: &Config, acq: &Acq) -> Result<bool, String> {
     let tmp = path.with_extension(format!("{}.part", ext));
     let mut resp = resp;
     let mut f = fs::File::create(&tmp).map_err(|e| format!("{}", e))?;
-    resp.copy_to(&mut f).map_err(|e| format!("{}", e))?;
+    // Chunked copy so we can abort the instant a USB cable appears — releasing the file handle
+    // on /mnt/onboard so Nickel can unmount it for USB mass storage. The unfinished .part is
+    // removed (never renamed); the book is simply retried on the next sync pass.
+    {
+        use std::io::{Read, Write};
+        let mut buf = [0u8; 65536];
+        loop {
+            if crate::usb::should_pause(c) {
+                drop(f);
+                let _ = fs::remove_file(&tmp);
+                return Err("USB connecté — téléchargement interrompu".into());
+            }
+            let n = resp.read(&mut buf).map_err(|e| format!("{}", e))?;
+            if n == 0 { break; }
+            f.write_all(&buf[..n]).map_err(|e| format!("{}", e))?;
+        }
+    }
     drop(f);
     fs::rename(&tmp, &path).map_err(|e| format!("{}", e))?;
     log(&c.dest, &format!("\u{2913} {}", fname));
@@ -157,6 +173,12 @@ pub fn sync(client: &Client, c: &Config, list_only: bool) -> (u32, u32) {
         for n in navs { if !visited.contains(&n) { queue.push_back(n); } }
         if let Some(n) = next { if !visited.contains(&n) { queue.push_back(n); } }
         for acq in acqs {
+            // USB-aware: abort an in-progress sync the moment a cable appears, so we don't keep
+            // a book file open on /mnt/onboard while Nickel tries to unmount it for USB. See usb.rs.
+            if crate::usb::should_pause(c) {
+                log(&c.dest, "USB connecté → sync interrompu (mode USB mass storage)");
+                return (downloaded, seen);
+            }
             seen += 1;
             if !c.formats.is_empty() {
                 let e = ext_for(&acq, None);

@@ -10,6 +10,8 @@ mod stats;
 mod wifi;
 mod panelize;
 mod web;
+mod captive;
+mod usb;
 
 use std::fs;
 use std::path::Path;
@@ -18,9 +20,48 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use config::{load_features, Config};
 use web::Status;
 
+/// Local UTC offset in seconds, read once from `date +%z` (e.g. "+0200"). Falls back to UTC.
+fn tz_offset_secs() -> i64 {
+    use std::sync::OnceLock;
+    static OFF: OnceLock<i64> = OnceLock::new();
+    *OFF.get_or_init(|| {
+        std::process::Command::new("date").arg("+%z").output().ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .and_then(|s| {
+                let s = s.trim();
+                if s.len() < 5 { return None; }
+                let sign = if s.starts_with('-') { -1 } else { 1 };
+                let h: i64 = s.get(1..3)?.parse().ok()?;
+                let m: i64 = s.get(3..5)?.parse().ok()?;
+                Some(sign * (h * 3600 + m * 60))
+            })
+            .unwrap_or(0)
+    })
+}
+
+/// Epoch seconds → "YYYY-MM-DD HH:MM:SS" in local time, dependency-free (civil calendar).
+fn fmt_ts(epoch: u64) -> String {
+    let t = epoch as i64 + tz_offset_secs();
+    let days = t.div_euclid(86400);
+    let sod = t.rem_euclid(86400);
+    let (hh, mm, ss) = (sod / 3600, (sod % 3600) / 60, sod % 60);
+    // days since 1970-01-01 → civil date (Howard Hinnant's algorithm)
+    let z = days + 719468;
+    let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", y, m, d, hh, mm, ss)
+}
+
 pub fn log(dest: &str, msg: &str) {
     let secs = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-    let line = format!("[{}] {}", secs, msg);
+    let line = format!("[{}] {}", fmt_ts(secs), msg);
     println!("{}", line);
     let p = Path::new(dest).join("kobo-syncd.log");
     if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(p) {
@@ -40,6 +81,13 @@ fn run_cycle(
     status: &Arc<Mutex<Status>>,
     list_only: bool,
 ) {
+    // 0) USB-aware: if a USB cable is present, do nothing under /mnt/onboard so Nickel can
+    //    unmount it for USB mass storage (otherwise the PC never sees the storage). See usb.rs.
+    if !list_only && usb::should_pause(c) {
+        log(&c.dest, "USB connecté → sync en pause (évite de bloquer le mode USB mass storage)");
+        return;
+    }
+
     // 1) wifi conditionnel
     let online = if features.contains("wifi") {
         let allowed = wifi::allowed_now(c);
@@ -136,6 +184,11 @@ fn main() {
         if c0.getb("web", "enabled", true) {
             let (cp, fp, st) = (config_path.clone(), features_path.clone(), status.clone());
             std::thread::spawn(move || web::serve(cp, fp, st));
+        }
+        // Répondeur du connectivity check (loopback) : laisse le navigateur s'ouvrir quand
+        // le firewall coupe Internet. Reçoit du trafic seulement via la règle NAT d'opds-netcut.
+        if c0.getb("net", "captive", true) {
+            std::thread::spawn(captive::serve);
         }
         log(&c0.dest, &format!("daemon (interval={}s)", c0.interval));
         loop {

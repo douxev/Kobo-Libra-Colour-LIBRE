@@ -52,9 +52,14 @@ anyC() { for m in opds wallabag annotations positions stats wifi; do feat "$m" &
         fi
     fi
 
-    # 4) Group C daemon
+    # 4) Group C daemon.
+    # CRITICAL: redirect the daemon's own stdout/stderr to /dev/null. This block's output is
+    # redirected to boot.log on /mnt/onboard; without this redirection the backgrounded daemon
+    # would INHERIT that open fd and hold /mnt/onboard busy FOREVER, so Nickel could never
+    # unmount it for USB mass storage (host sees the gadget but SIZE=0 / no media). The daemon
+    # keeps its own kobo-syncd.log (opened per-write), so nothing is lost.
     if [ -x "$KDIR/kobo-syncd" ] && [ -f "$CONF" ] && anyC; then
-        "$KDIR/kobo-syncd" --config "$CONF" --features "$FEAT" --daemon &
+        "$KDIR/kobo-syncd" --config "$CONF" --features "$FEAT" --daemon >/dev/null 2>&1 &
         echo "kobo-syncd daemon started (pid $!)"
     fi
 } >> "$LOG" 2>&1
