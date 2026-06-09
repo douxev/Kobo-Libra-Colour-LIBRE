@@ -1,0 +1,11 @@
+[package]
+name = "convert"
+edition.workspace = true
+version.workspace = true
+description = "Conversions : HTML->EPUB (readability), CBR->CBZ, lecture métadonnées/couverture EPUB"
+
+[dependencies]
+zip = { version = "2", default-features = false, features = ["deflate"] }
+roxmltree = "0.20"
+scraper = "0.20"
+unrar = "0.5"

@@ -1,0 +1,13 @@
+[package]
+name = "kobo-dbtool"
+edition.workspace = true
+version.workspace = true
+description = "Groupe B : manipulation de KoboReader.sqlite (collections, watched-folder, tris/filtres)"
+
+[[bin]]
+name = "kobo-dbtool"
+path = "src/main.rs"
+
+[dependencies]
+convert = { path = "../../crates/convert" }
+rusqlite = { version = "0.32", features = ["bundled"] }

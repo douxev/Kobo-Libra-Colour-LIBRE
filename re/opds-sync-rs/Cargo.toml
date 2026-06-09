@@ -1,0 +1,21 @@
+[package]
+name = "opds-sync"
+version = "1.0.0"
+edition = "2021"
+description = "Sync OPDS (Kavita/calibre-web) -> Kobo, binaire statique ARM"
+
+[[bin]]
+name = "opds-sync"
+path = "src/main.rs"
+
+[dependencies]
+ureq = { version = "2.12", default-features = false, features = ["tls", "gzip"] }
+roxmltree = "0.20"
+url = "2.5"
+
+[profile.release]
+opt-level = "z"     # binaire le plus petit possible
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

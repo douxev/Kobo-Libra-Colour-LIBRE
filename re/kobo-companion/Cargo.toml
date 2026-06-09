@@ -1,0 +1,20 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/kclient",
+    "crates/convert",
+    "crates/fbhook",
+    "bin/kobo-syncd",
+    "bin/kobo-dbtool",
+]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+
+# Binaire le plus petit possible (pas de panic=abort : tokio/reqwest préfèrent l'unwind)
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+strip = true

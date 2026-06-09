@@ -1,0 +1,63 @@
+#!/bin/sh
+# kobo-companion boot wrapper (delivered via Kobo.tgz into /usr/local/Kobo).
+# Launched by /etc/rc.local at boot, AS ROOT, before Nickel.
+#   1) network firewall (opds-netcut)                      [if present]
+#   2) Group B tasks before Nickel (database is free)      [FEAT_collections/watch/sortfilter]
+#   3) Group A: LD_PRELOAD libfbhook into Nickel           [FEAT_display]
+#   4) Group C daemon (kobo-syncd)                         [if any C module is enabled]
+#   5) exec the real memorylogger (never breaks the boot)
+# Golden rule: no failure here may prevent the device from booting.
+
+KDIR=/usr/local/Kobo
+ADDS=/mnt/onboard/.adds/kobo-companion
+CONF="$ADDS/kobo-companion.conf"
+FEAT="$ADDS/features.conf"
+LOG="$ADDS/boot.log"
+mkdir -p "$ADDS" 2>/dev/null
+
+feat() { [ -f "$FEAT" ] && grep -qiE "^FEAT_$1[[:space:]]*=[[:space:]]*(yes|true|1)" "$FEAT"; }
+anyC() { for m in opds wallabag annotations positions stats wifi; do feat "$m" && return 0; done; return 1; }
+
+{
+    echo "=== boot $(date 2>/dev/null) ==="
+
+    # 1) firewall (reads netcut.conf)
+    [ -x "$KDIR/opds-netcut.sh" ] && "$KDIR/opds-netcut.sh" start
+
+    # 2) Group B BEFORE Nickel (the SQLite database is still free)
+    if [ -x "$KDIR/kobo-dbtool" ] && [ -f "$CONF" ]; then
+        for task in collections watch sortfilter; do
+            feat "$task" && { echo "dbtool $task..."; "$KDIR/kobo-dbtool" "$task" --config "$CONF"; }
+        done
+    fi
+
+    # 3) Group A: preload the display library into Nickel (via ld.so.preload).
+    #    Best-effort: remounts / read-write if needed, writes, then remounts read-only.
+    #    VALIDATE ON DEVICE first.
+    PRELOAD_LINE="$KDIR/libfbhook.so"
+    if feat display && [ -f "$KDIR/libfbhook.so" ]; then
+        if ! grep -qs "libfbhook.so" /etc/ld.so.preload 2>/dev/null; then
+            REMOUNTED=0
+            if ! touch /etc/.kc_wtest 2>/dev/null; then mount -o remount,rw / 2>/dev/null && REMOUNTED=1; fi
+            rm -f /etc/.kc_wtest 2>/dev/null
+            echo "$PRELOAD_LINE" >> /etc/ld.so.preload 2>/dev/null && echo "display: ld.so.preload enabled" || echo "display: failed to write ld.so.preload"
+            [ "$REMOUNTED" = 1 ] && mount -o remount,ro / 2>/dev/null
+        fi
+    else
+        # display disabled: remove any leftover (kill-switch)
+        if grep -qs "libfbhook.so" /etc/ld.so.preload 2>/dev/null; then
+            REMOUNTED=0; touch /etc/.kc_wtest 2>/dev/null || { mount -o remount,rw / 2>/dev/null && REMOUNTED=1; }; rm -f /etc/.kc_wtest 2>/dev/null
+            grep -v "libfbhook.so" /etc/ld.so.preload > /etc/ld.so.preload.new 2>/dev/null && mv /etc/ld.so.preload.new /etc/ld.so.preload 2>/dev/null
+            [ "$REMOUNTED" = 1 ] && mount -o remount,ro / 2>/dev/null
+        fi
+    fi
+
+    # 4) Group C daemon
+    if [ -x "$KDIR/kobo-syncd" ] && [ -f "$CONF" ] && anyC; then
+        "$KDIR/kobo-syncd" --config "$CONF" --features "$FEAT" --daemon &
+        echo "kobo-syncd daemon started (pid $!)"
+    fi
+} >> "$LOG" 2>&1
+
+# 5) exec the original binary
+exec "$KDIR/memorylogger.bin" "$@"

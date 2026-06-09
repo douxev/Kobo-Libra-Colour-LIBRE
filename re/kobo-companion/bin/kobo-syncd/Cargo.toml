@@ -1,0 +1,17 @@
+[package]
+name = "kobo-syncd"
+edition.workspace = true
+version.workspace = true
+description = "Daemon de sync Kobo (OPDS/Wallabag/annotations/positions/stats/wifi) — client mTLS partagé"
+
+[[bin]]
+name = "kobo-syncd"
+path = "src/main.rs"
+
+[dependencies]
+kclient = { path = "../../crates/kclient" }
+convert = { path = "../../crates/convert" }
+roxmltree = "0.20"
+url = "2.5"
+serde_json = "1"
+rusqlite = { version = "0.32", features = ["bundled"] }

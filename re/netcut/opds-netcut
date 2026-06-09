@@ -1,0 +1,75 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          opds-netcut
+# Required-Start:    $network
+# Default-Start:     5
+# Short-Description: Cut the internet, allow only the LAN (local OPDS reading)
+### END INIT INFO
+#
+# "Independence" network layer for the Kobo Libra Colour (tolino-qt6 5.1.x firmware).
+# Policy: all OUTGOING traffic is DROP by default; only the local LAN is allowed
+# (OPDS server, router DNS/DHCP/NTP). => no internet connection at all
+# (Google Analytics telemetry, Kobo store, Rakuten heartbeat, Apple captive-check, etc.).
+#
+# Called by the boot wrapper as "opds-netcut.sh start".
+#
+# ============ Defaults (overridden by the user config) ============
+LAN_SUBNET="192.168.1.0/24"     # allowed local subnet
+OPDS_HOST=""                    # optional: single OPDS server IP (hardening)
+OPDS_PORT=""                    # optional: OPDS port
+ENABLE_FIREWALL="yes"           # "no" = do nothing (firewall disabled)
+# User config, editable over USB (takes precedence if present):
+NETCUT_CONF="/mnt/onboard/.adds/kobo-companion/netcut.conf"
+[ -f "$NETCUT_CONF" ] && . "$NETCUT_CONF"
+# ==================================================================
+
+IPT=/usr/sbin/iptables
+IP6=/usr/sbin/ip6tables
+LOG=/mnt/onboard/.adds/kobo-companion/opds-netcut.log
+
+log(){ echo "$(date '+%F %T') $*" >> "$LOG" 2>/dev/null; }
+
+apply() {
+    log "apply: LAN_SUBNET=$LAN_SUBNET OPDS_HOST=$OPDS_HOST:$OPDS_PORT"
+    # --- IPv4 ---
+    $IPT -F OUTPUT
+    $IPT -P OUTPUT DROP                                   # block everything by default
+    $IPT -A OUTPUT -o lo -j ACCEPT                        # loopback
+    $IPT -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    $IPT -A OUTPUT -p udp --dport 67:68 -j ACCEPT         # DHCP (get a Wi-Fi IP)
+    if [ -n "$OPDS_HOST" ]; then
+        # hardened mode: only the OPDS server + LAN DNS/NTP
+        $IPT -A OUTPUT -p udp --dport 53 -d "$LAN_SUBNET" -j ACCEPT   # router DNS
+        $IPT -A OUTPUT -p udp --dport 123 -d "$LAN_SUBNET" -j ACCEPT  # router NTP (time -> TLS)
+        if [ -n "$OPDS_PORT" ]; then
+            $IPT -A OUTPUT -p tcp -d "$OPDS_HOST" --dport "$OPDS_PORT" -j ACCEPT
+        else
+            $IPT -A OUTPUT -d "$OPDS_HOST" -j ACCEPT
+        fi
+    else
+        # simple mode: whole LAN allowed (OPDS, DNS, NTP, router), internet blocked
+        $IPT -A OUTPUT -d "$LAN_SUBNET" -j ACCEPT
+    fi
+    # --- IPv6: cut entirely (not needed, avoids bypass) ---
+    if [ -x "$IP6" ]; then
+        $IP6 -F OUTPUT 2>/dev/null
+        $IP6 -P OUTPUT DROP 2>/dev/null
+        $IP6 -A OUTPUT -o lo -j ACCEPT 2>/dev/null
+    fi
+    log "apply: done"
+}
+
+open() {                                                  # emergency KILL-SWITCH: open everything
+    $IPT -F OUTPUT; $IPT -P OUTPUT ACCEPT
+    [ -x "$IP6" ] && { $IP6 -F OUTPUT; $IP6 -P OUTPUT ACCEPT; }
+    log "open: firewall disabled (everything allowed)"
+}
+
+case "$1" in
+    start|restart|force-reload)
+        if [ "$ENABLE_FIREWALL" = "yes" ]; then apply; else log "firewall disabled (ENABLE_FIREWALL=$ENABLE_FIREWALL)"; fi ;;
+    stop|open)                  open  ;;     # restore the internet (kill-switch)
+    status)                     $IPT -L OUTPUT -n -v ;;
+    *) echo "Usage: $0 {start|stop|open|status}"; exit 1 ;;
+esac
+exit 0

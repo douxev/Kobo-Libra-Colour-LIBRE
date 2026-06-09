@@ -1,0 +1,10 @@
+[package]
+name = "kclient"
+edition.workspace = true
+version.workspace = true
+description = "Client HTTP mTLS partagé (reqwest + rustls), identité depuis une CA Caddy"
+
+[dependencies]
+# reqwest bloquant + rustls ; on évite OpenSSL pour rester statique musl.
+# rustls-tls = racines webpki par défaut + on ajoute la CA Caddy par-dessus (add_root_certificate).
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls", "gzip"] }

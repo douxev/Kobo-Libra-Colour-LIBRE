@@ -1,0 +1,89 @@
+127.0.0.1	localhost
+
+# The following lines are desirable for IPv6 capable hosts
+::1     localhost ip6-localhost ip6-loopback
+fe00::0 ip6-localnet
+ff00::0 ip6-mcastprefix
+ff02::1 ip6-allnodes
+ff02::2 ip6-allrouters
+127.0.1.1 ereader
+
+
+# === OPDS netcut : blackhole télémétrie/store/social (décompilé de libnickel) ===
+
+127.0.0.1	api.ipinfodb.com
+::1	api.ipinfodb.com
+127.0.0.1	api.kobobooks.com
+::1	api.kobobooks.com
+127.0.0.1	auth.overdrive.com
+::1	auth.overdrive.com
+127.0.0.1	books.rakuten.co.jp
+::1	books.rakuten.co.jp
+127.0.0.1	captive.apple.com
+::1	captive.apple.com
+127.0.0.1	clients3.google.com
+::1	clients3.google.com
+127.0.0.1	connectivitycheck.gstatic.com
+::1	connectivitycheck.gstatic.com
+127.0.0.1	drive.google.com
+::1	drive.google.com
+127.0.0.1	ecimages.kobobooks.com
+::1	ecimages.kobobooks.com
+127.0.0.1	ereaderfiles.kobo.com
+::1	ereaderfiles.kobo.com
+127.0.0.1	getpocket.com
+::1	getpocket.com
+127.0.0.1	google.com
+::1	google.com
+127.0.0.1	graph.facebook.com
+::1	graph.facebook.com
+127.0.0.1	hb.afl.rakuten.co.jp
+::1	hb.afl.rakuten.co.jp
+127.0.0.1	help.kobo.com
+::1	help.kobo.com
+127.0.0.1	images.kobobooks.com
+::1	images.kobobooks.com
+127.0.0.1	kobobooks.com
+::1	kobobooks.com
+127.0.0.1	libraryfinder.api.overdrive.com
+::1	libraryfinder.api.overdrive.com
+127.0.0.1	m.facebook.com
+::1	m.facebook.com
+127.0.0.1	management.mytolino.com
+::1	management.mytolino.com
+127.0.0.1	mobile.kobobooks.com
+::1	mobile.kobobooks.com
+127.0.0.1	ns.adobe.com
+::1	ns.adobe.com
+127.0.0.1	oauth.kobo.com
+::1	oauth.kobo.com
+127.0.0.1	oauthstage.kobo.com
+::1	oauthstage.kobo.com
+127.0.0.1	opensource.mytolino.com
+::1	opensource.mytolino.com
+127.0.0.1	rdc-api-catalog-gateway-api.rakuten.co.jp
+::1	rdc-api-catalog-gateway-api.rakuten.co.jp
+127.0.0.1	readingservices.kobo.com
+::1	readingservices.kobo.com
+127.0.0.1	search.books.rakuten.co.jp
+::1	search.books.rakuten.co.jp
+127.0.0.1	ssl.google-analytics.com
+::1	ssl.google-analytics.com
+127.0.0.1	storeapi.kobo.com
+::1	storeapi.kobo.com
+127.0.0.1	text.getpocket.com
+::1	text.getpocket.com
+127.0.0.1	thunder-api.overdrive.com
+::1	thunder-api.overdrive.com
+127.0.0.1	worldtimeapi.org
+::1	worldtimeapi.org
+127.0.0.1	www.facebook.com
+::1	www.facebook.com
+127.0.0.1	www.google-analytics.com
+::1	www.google-analytics.com
+127.0.0.1	www.google.com
+::1	www.google.com
+127.0.0.1	www.kobo.com
+::1	www.kobo.com
+# === fin blackhole ===
+

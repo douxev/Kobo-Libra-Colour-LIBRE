@@ -1,0 +1,60 @@
+# ============================================================================
+#  .gitignore — ne publie QUE le code/outils du projet.
+#  Exclut : firmware Kobo (copyright), gros outils téléchargés, builds, et
+#  tout contenu dérivé par rétro-ingénierie (symboles, décompilation, dumps).
+# ============================================================================
+
+# --- Firmware Kobo extrait (COPYRIGHT — ne jamais publier) ---
+mnt/
+rootfs.img
+rootfs.ext4
+*.img
+sha2-256sums
+driver.sh
+decompressor
+libnickel.so
+libnickel.so.*
+monza/
+spa-bw/
+spa-colour/
+
+# --- Outils volumineux téléchargés (à re-télécharger soi-même) ---
+ghidra.zip
+ghidra_*_PUBLIC/
+jdk*.tar.gz
+jdk-*/
+*.zip
+*.tar.gz
+*.tar
+
+# --- Environnements / builds ---
+.revenv/
+venv/
+__pycache__/
+*.pyc
+re/opds-sync-rs/target/
+target/
+
+# --- Sorties de rétro-ingénierie (dérivées du binaire Kobo — régénérables en local) ---
+re/out/
+re/ghidra_proj/
+
+# --- Artefacts de packaging (régénérés par build_bundle.sh / deploy.sh ;
+#     contiennent un binaire Kobo + une éventuelle config perso) ---
+re/dist/
+
+# --- Logs & fichiers de travail ---
+*.log
+re/jdk_path.txt
+
+# --- Config LOCALE remplie avec tes infos (IP, clé API) — ne pas publier ---
+#     (les *modèles* opds-sync.conf / netcut.conf SONT publiés)
+**/opds-sync.local.conf
+**/netcut.local.conf
+
+# --- OS / éditeurs ---
+.DS_Store
+*.swp
+*~
+.idea/
+.vscode/

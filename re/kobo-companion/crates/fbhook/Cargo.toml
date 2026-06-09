@@ -1,0 +1,12 @@
+[package]
+name = "fbhook"
+edition.workspace = true
+version.workspace = true
+description = "Groupe A : lib LD_PRELOAD qui intercepte les ioctl /dev/fb0 (couleur/waveform/dithering/nuit)"
+
+[lib]
+name = "fbhook"
+crate-type = ["cdylib"]
+
+[dependencies]
+libc = "0.2"
